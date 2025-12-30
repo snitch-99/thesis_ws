@@ -1,3 +1,0 @@
-[console_scripts]
-mavros_control = drone_mapping.mavros_control:main
-traversability = drone_mapping.traversability:main
