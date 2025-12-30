@@ -1,0 +1,23 @@
+[0.680s] Invoking command in '/home/kanav/workspaces/thesis_ws/src/drone_mapping': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/kanav/workspaces/thesis_ws/build/drone_mapping/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/kanav/workspaces/thesis_ws/install/drone_mapping/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/drone_mapping build --build-base /home/kanav/workspaces/thesis_ws/build/drone_mapping/build install --record /home/kanav/workspaces/thesis_ws/build/drone_mapping/install.log --single-version-externally-managed install_data
+[0.911s] running egg_info
+[0.929s] writing ../../build/drone_mapping/drone_mapping.egg-info/PKG-INFO
+[0.929s] writing dependency_links to ../../build/drone_mapping/drone_mapping.egg-info/dependency_links.txt
+[0.929s] writing entry points to ../../build/drone_mapping/drone_mapping.egg-info/entry_points.txt
+[0.930s] writing requirements to ../../build/drone_mapping/drone_mapping.egg-info/requires.txt
+[0.930s] writing top-level names to ../../build/drone_mapping/drone_mapping.egg-info/top_level.txt
+[0.966s] reading manifest file '../../build/drone_mapping/drone_mapping.egg-info/SOURCES.txt'
+[0.967s] writing manifest file '../../build/drone_mapping/drone_mapping.egg-info/SOURCES.txt'
+[0.967s] running build
+[0.967s] running build_py
+[0.967s] running install
+[0.972s] running install_lib
+[0.990s] running install_data
+[0.991s] copying models/entities/rock/rock.glb -> /home/kanav/workspaces/thesis_ws/install/drone_mapping/share/drone_mapping/models/entities/rock
+[1.011s] running install_egg_info
+[1.030s] removing '/home/kanav/workspaces/thesis_ws/install/drone_mapping/lib/python3.12/site-packages/drone_mapping-0.0.0-py3.12.egg-info' (and everything under it)
+[1.030s] Copying ../../build/drone_mapping/drone_mapping.egg-info to /home/kanav/workspaces/thesis_ws/install/drone_mapping/lib/python3.12/site-packages/drone_mapping-0.0.0-py3.12.egg-info
+[1.031s] running install_scripts
+[1.145s] Installing mavros_control script to /home/kanav/workspaces/thesis_ws/install/drone_mapping/lib/drone_mapping
+[1.145s] Installing traversability script to /home/kanav/workspaces/thesis_ws/install/drone_mapping/lib/drone_mapping
+[1.145s] writing list of installed files to '/home/kanav/workspaces/thesis_ws/build/drone_mapping/install.log'
+[1.165s] Invoked command in '/home/kanav/workspaces/thesis_ws/src/drone_mapping' returned '0': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/kanav/workspaces/thesis_ws/build/drone_mapping/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/kanav/workspaces/thesis_ws/install/drone_mapping/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/drone_mapping build --build-base /home/kanav/workspaces/thesis_ws/build/drone_mapping/build install --record /home/kanav/workspaces/thesis_ws/build/drone_mapping/install.log --single-version-externally-managed install_data
