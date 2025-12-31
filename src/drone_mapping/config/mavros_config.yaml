@@ -1,0 +1,10 @@
+/**/local_position:
+  ros__parameters:
+    tf.send: true
+    tf.frame_id: "map"
+    tf.child_frame_id: "base_link"
+    tf.send_fcu: false
+
+/**/global_position:
+  ros__parameters:
+    tf.send: false

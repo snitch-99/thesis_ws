@@ -30,17 +30,19 @@ def generate_launch_description():
     px4_sitl = ExecuteProcess(
         cmd=[
             'gnome-terminal', '--title=PX4 SITL', '--', 'bash', '-c',
-            'make px4_sitl gz_x500; exec bash'
+            'make px4_sitl gz_x500_depth; exec bash'
         ],
         cwd=px4_dir,
         output='screen'
     )
 
+    mav_config = os.path.join(drone_mapping_share, 'config', 'mavros_config.yaml')
+
     # 3. MAVROS
     mavros_launch = ExecuteProcess(
         cmd=[
             'gnome-terminal', '--title=MAVROS', '--', 'bash', '-c',
-            'ros2 launch mavros px4.launch fcu_url:=udp://:14540@127.0.0.1:14557; exec bash'
+            f'ros2 launch mavros px4.launch fcu_url:=udp://:14540@127.0.0.1:14557 config_yaml:={mav_config}; exec bash'
         ],
         output='screen'
     )
@@ -77,6 +79,63 @@ def generate_launch_description():
         output='screen'
     )
 
+    # 7. Bridge ROS-Gazebo Topics
+    # Bridge Depth Image and Camera Info
+    # Note: Using fully qualified Gazebo topic names provided by user/inspection
+    bridge = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        arguments=[
+            # Depth Image (Assuming standard topic, but might need qualified path too?)
+            '/depth_camera@sensor_msgs/msg/Image@gz.msgs.Image',
+            # Camera Info (RGB Camera Info as requested)
+            '/world/default/model/x500_depth_0/link/camera_link/sensor/IMX214/camera_info@sensor_msgs/msg/CameraInfo@gz.msgs.CameraInfo'
+        ],
+        remappings=[
+            ('/depth_camera', '/camera/depth'),
+            ('/world/default/model/x500_depth_0/link/camera_link/sensor/IMX214/camera_info', '/camera/camera_info')
+        ],
+        output='screen'
+    )
+
+    # 8. Depth to Point Cloud Node
+    # Converts depth image to point cloud
+    depth_to_pointcloud = Node(
+        package='depth_image_proc',
+        executable='point_cloud_xyz_node',
+        name='depth_to_pointcloud',
+        output='screen',
+        remappings=[
+            ('image_rect', '/camera/depth'),
+            ('camera_info', '/camera/camera_info'),
+            ('points', '/camera/points')
+        ]
+    )
+
+    # 9. Static TF (DEBUG): Map to Base Link
+    # Force publish map->base_link since MAVROS is failing
+    # WARNING: Drone will appear stationary in RViz
+    map_tf = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        arguments=['0', '0', '0', '0', '0', '0', 'map', 'base_link'],
+        output='screen'
+    )
+
+    # 10. Static TF (Camera)
+    # Transform from base_link to camera_link
+    # Using explicit arguments for robustness
+    camera_tf = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        arguments=[
+            '--x', '0.12', '--y', '0.03', '--z', '0.242', 
+            '--yaw', '-1.57', '--pitch', '0', '--roll', '-1.57', 
+            '--frame-id', 'base_link', '--child-frame-id', 'camera_link'
+        ],
+        output='screen'
+    )
+
     # --- SEQUENCE ---
     # T=0s: QGC (Start immediately)
     
@@ -101,6 +160,10 @@ def generate_launch_description():
         delayed_px4,
         delayed_mavros,
         delayed_rock,
+        bridge,
         delayed_traversability,
-        delayed_control
+        delayed_control,
+        depth_to_pointcloud,
+        map_tf,
+        camera_tf
     ])
