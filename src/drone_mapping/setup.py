@@ -14,7 +14,7 @@ package_name = 'drone_mapping'
 setup(
     name=package_name,
     version='0.0.0',
-    packages=find_packages(exclude=['test']),
+    packages=[package_name, 'drone_utils'],
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
@@ -37,6 +37,8 @@ setup(
         'console_scripts': [
             'traversability = drone_mapping.traversability:main',
             'mavros_control = drone_mapping.mavros_control:main',
+
+            'synced_broadcaster = drone_mapping.synced_broadcaster:main',
         ],
     },
 )

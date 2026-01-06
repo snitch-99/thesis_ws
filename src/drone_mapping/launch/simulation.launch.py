@@ -82,58 +82,42 @@ def generate_launch_description():
     # 7. Bridge ROS-Gazebo Topics
     # Bridge Depth Image and Camera Info
     # Note: Using fully qualified Gazebo topic names provided by user/inspection
+    # 8. Bridge ROS-Gazebo Topics
     bridge = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
         arguments=[
-            # Depth Image (Assuming standard topic, but might need qualified path too?)
             '/depth_camera@sensor_msgs/msg/Image@gz.msgs.Image',
-            # Camera Info (RGB Camera Info as requested)
-            '/world/default/model/x500_depth_0/link/camera_link/sensor/IMX214/camera_info@sensor_msgs/msg/CameraInfo@gz.msgs.CameraInfo'
+            '/camera_info@sensor_msgs/msg/CameraInfo@gz.msgs.CameraInfo'
         ],
         remappings=[
             ('/depth_camera', '/camera/depth'),
-            ('/world/default/model/x500_depth_0/link/camera_link/sensor/IMX214/camera_info', '/camera/camera_info')
+            ('/camera_info', '/camera/camera_info')
         ],
+        parameters=[{'use_sim_time': True}],
         output='screen'
     )
 
-    # 8. Depth to Point Cloud Node
-    # Converts depth image to point cloud
+    # 9. Synced Broadcaster (TF + Image Forwarding)
+    synced_broadcaster = Node(
+        package='drone_mapping',
+        executable='synced_broadcaster',
+        parameters=[{'use_sim_time': True}],
+        output='screen'
+    )
+
+    # 10. Depth to Point Cloud Node
     depth_to_pointcloud = Node(
         package='depth_image_proc',
         executable='point_cloud_xyz_node',
         name='depth_to_pointcloud',
+        parameters=[{'use_sim_time': True}],
         output='screen',
         remappings=[
-            ('image_rect', '/camera/depth'),
-            ('camera_info', '/camera/camera_info'),
+            ('image_rect', '/camera/depth_synced'), # Listen to SYNCED topic
+            ('camera_info', '/camera/camera_info_synced'),
             ('points', '/camera/points')
         ]
-    )
-
-    # 9. Static TF (DEBUG): Map to Base Link
-    # Force publish map->base_link since MAVROS is failing
-    # WARNING: Drone will appear stationary in RViz
-    map_tf = Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        arguments=['0', '0', '0', '0', '0', '0', 'map', 'base_link'],
-        output='screen'
-    )
-
-    # 10. Static TF (Camera)
-    # Transform from base_link to camera_link
-    # Using explicit arguments for robustness
-    camera_tf = Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        arguments=[
-            '--x', '0.12', '--y', '0.03', '--z', '0.242', 
-            '--yaw', '-1.57', '--pitch', '0', '--roll', '-1.57', 
-            '--frame-id', 'base_link', '--child-frame-id', 'camera_link'
-        ],
-        output='screen'
     )
 
     # --- SEQUENCE ---
@@ -164,6 +148,5 @@ def generate_launch_description():
         delayed_traversability,
         delayed_control,
         depth_to_pointcloud,
-        map_tf,
-        camera_tf
+        synced_broadcaster,
     ])

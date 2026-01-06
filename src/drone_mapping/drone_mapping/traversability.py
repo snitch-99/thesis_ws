@@ -2,7 +2,7 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped
 from mavros_msgs.msg import State
-from drone_mapping.trajectory_generator import generate_orbit
+from drone_utils.trajectory_generator import generate_orbit
 import math
 
 class TraversabilityNode(Node):
@@ -19,8 +19,8 @@ class TraversabilityNode(Node):
         # Orbit Parameters
         self.center_x = 5.0
         self.center_y = -5.0
-        self.radius = 7.0
-        self.height = 2.0
+        self.radius = 5.0
+        self.height = 1.0
         self.threshold = 0.2 # meters
 
         # Generate Waypoints
@@ -109,52 +109,40 @@ class TraversabilityNode(Node):
 
     def traversing(self):
         """
-        Orbit Logic:
-        1. Get current target waypoint.
-        2. Check distance to target.
-        3. If < threshold, advance index.
-        4. Calculate Yaw to face (center_x, center_y).
-        5. Publish setpoint.
+        Modified to HOVER at (0, 0, 2) for debugging.
         """
         if not self.waypoints:
             return
 
-        # Get Target Point
-        wx, wy, wz = self.waypoints[self.current_wp_index]
+        # 1. Get current target
+        target_x, target_y, target_z = self.waypoints[self.current_wp_index]
         
-        # Current Position
-        cx = self.current_pose.pose.position.x
-        cy = self.current_pose.pose.position.y
-        cz = self.current_pose.pose.position.z
+        # 2. Check distance
+        dx = self.current_pose.pose.position.x - target_x
+        dy = self.current_pose.pose.position.y - target_y
+        dz = self.current_pose.pose.position.z - target_z
+        dist = math.sqrt(dx*dx + dy*dy + dz*dz)
         
-        # Calculate Distance
-        dist = math.sqrt((wx - cx)**2 + (wy - cy)**2 + (wz - cz)**2)
-        
-        # Advance if close enough
+        # Advance if close
         if dist < self.threshold:
             self.current_wp_index = (self.current_wp_index + 1) % len(self.waypoints)
-            # Update target to next point
-            wx, wy, wz = self.waypoints[self.current_wp_index]
-            self.get_logger().info(f'Reached WP {self.current_wp_index}. Next: {wx:.2f}, {wy:.2f}')
+            # Update target
+            target_x, target_y, target_z = self.waypoints[self.current_wp_index]
 
-        # Prepare Message
         target_pose = PoseStamped()
         target_pose.header.stamp = self.get_clock().now().to_msg()
         target_pose.header.frame_id = "map"
         
-        target_pose.pose.position.x = wx
-        target_pose.pose.position.y = wy
-        target_pose.pose.position.z = wz
+        target_pose.pose.position.x = target_x
+        target_pose.pose.position.y = target_y
+        target_pose.pose.position.z = target_z
         
-        # Calculate Yaw to face Center (center_x, center_y)
-        # Vector from Drone to Center
-        dx = self.center_x - wx  # Ideally calculate from current pos, but from WP is smoother
-        dy = self.center_y - wy
-        yaw = math.atan2(dy, dx)
+        # 3. Calculate Orientation: Face the Center
+        # Vector from drone (or target) to center
+        # Ideally we want the DRONE to face center, so look at center from target position
+        yaw = math.atan2(self.center_y - target_y, self.center_x - target_x)
         
-        # Convert Yaw to Quaternion
-        q = self.yaw_to_quaternion(yaw)
-        target_pose.pose.orientation = q
+        target_pose.pose.orientation = self.yaw_to_quaternion(yaw)
 
         self.local_pos_pub.publish(target_pose)
 
