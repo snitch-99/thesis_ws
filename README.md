@@ -54,14 +54,23 @@ ros2 launch drone_mapping simulation.launch.py
 ### Configuration Notes
 
 #### TF Tree Configuration
-The TF tree is constructed as follows:
+The TF tree is managed by `synced_broadcaster.py` to ensure high-fidelity timestamp synchronization:
 - **`map` -> `base_link`**: 
-    - Ideally provided by MAVROS (`global_position` plugin).
-    - *Current Fallback*: A static debug publisher is included in `simulation.launch.py` to ensure visualization if MAVROS fails to lock GPS in simulation.
+    - Published by `synced_broadcaster` by interpolating `mavros/local_position/odom` to match the exact timestamp of depth images.
 - **`base_link` -> `camera_link`**:
-    - Provided by a `static_transform_publisher` in the launch file.
-    - Translation: `0.12 0.03 0.242` (Matches SDF)
-    - Rotation: Optical frame standard.
+    - Physical mount frame (Identity rotation, Translation match SDF).
+- **`camera_link` -> `camera_link_optical`**:
+    - Standard optical rotation (Z-Forward, X-Right, Y-Down).
+    - All visual data (Depth, Point Clouds) is expressed in this frame.
 
 #### Point Cloud Generation
-We use `depth_image_proc/point_cloud_xyz` composable node to convert the raw depth image from Gazebo to a 3D Point Cloud.
+We use `depth_image_proc` to generate 3D point clouds.
+- **Synchronization**: `synced_broadcaster` ensures `camera_info` and `depth_image` have identical timestamps and correct Optical Frame IDs.
+- **Topics**: 
+    - Input: `/camera/depth_synced`, `/camera/camera_info_synced`
+    - Output: `/camera/points` (in `camera_link_optical` frame)
+
+#### Trajectory Generation
+The `traversability` node implements a circular orbit strategy:
+- **Logic**: Generates waypoints around a target center using `drone_utils/trajectory_generator.py`.
+- **Behavior**: The drone orbits the target while continuously facing the center.
