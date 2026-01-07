@@ -47,16 +47,16 @@ def generate_launch_description():
         output='screen'
     )
 
-    # 4. Spawn Rock (Needs Gazebo up)
+    # 4. Spawning Rock (Target for Orbit)
     spawn_rock = Node(
         package='ros_gz_sim',
         executable='create',
         arguments=[
             '-name', 'rock',
-            '-file', 'rock',
-            '-x', '4.0',
-            '-y', '-4.0',
-            '-z', '0.9'
+            '-x', '5.0',
+            '-y', '-5.0',
+            '-z', '0.5',
+            '-file', os.path.join(models_path, 'rock', 'model.sdf')
         ],
         output='screen'
     )
@@ -106,6 +106,7 @@ def generate_launch_description():
         output='screen'
     )
 
+
     # 10. Depth to Point Cloud Node
     depth_to_pointcloud = Node(
         package='depth_image_proc',
@@ -114,10 +115,17 @@ def generate_launch_description():
         parameters=[{'use_sim_time': True}],
         output='screen',
         remappings=[
-            ('image_rect', '/camera/depth_synced'), # Listen to SYNCED topic
+            ('image_rect', '/camera/depth_synced'),
             ('camera_info', '/camera/camera_info_synced'),
             ('points', '/camera/points')
         ]
+    )
+
+    # 11. Rosbag Recorder (Synced Packet)
+    rosbag_recorder = Node(
+        package='drone_mapping',
+        executable='rosbag_recorder',
+        output='screen'
     )
 
     # --- SEQUENCE ---
@@ -147,6 +155,8 @@ def generate_launch_description():
         bridge,
         delayed_traversability,
         delayed_control,
-        depth_to_pointcloud,
         synced_broadcaster,
+        depth_to_pointcloud,
+        rosbag_recorder,
+
     ])

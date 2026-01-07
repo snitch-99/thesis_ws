@@ -12,6 +12,8 @@
   <depend>geometry_msgs</depend>
   <depend>mavros_msgs</depend>
   <exec_depend>depth_image_proc</exec_depend>
+  <depend>drone_interfaces</depend>
+
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

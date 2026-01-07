@@ -17,24 +17,24 @@ class TraversabilityNode(Node):
         self.initial_offboard_triggered = False
 
         # Orbit Parameters
-        self.center_x = 5.0
-        self.center_y = -5.0
-        self.radius = 5.0
-        self.height = 1.0
+        self.center_x  = 5.0
+        self.center_y  = -5.0
+        self.radius    = 5.0
+        self.height    = 1.0
         self.threshold = 0.2 # meters
 
         # Generate Waypoints
         # 0.1 radians ~ 5.7 degrees angular resolution
         # Pass Home (0,0) to start orbit at the closest point
         self.waypoints = generate_orbit(
-            self.center_x, 
-            self.center_y, 
-            self.radius, 
-            self.height, 
-            0.1,
-            home_x=0.0,
-            home_y=0.0
-        )
+                         self.center_x, 
+                         self.center_y, 
+                         self.radius, 
+                         self.height, 
+                         0.1,
+                         home_x=0.0,
+                         home_y=0.0
+                        )
         self.current_wp_index = 0
         
         # Subscriptions
@@ -108,9 +108,7 @@ class TraversabilityNode(Node):
         self.local_pos_pub.publish(safety_point)
 
     def traversing(self):
-        """
-        Modified to HOVER at (0, 0, 2) for debugging.
-        """
+
         if not self.waypoints:
             return
 
@@ -136,12 +134,8 @@ class TraversabilityNode(Node):
         target_pose.pose.position.x = target_x
         target_pose.pose.position.y = target_y
         target_pose.pose.position.z = target_z
-        
-        # 3. Calculate Orientation: Face the Center
-        # Vector from drone (or target) to center
-        # Ideally we want the DRONE to face center, so look at center from target position
+
         yaw = math.atan2(self.center_y - target_y, self.center_x - target_x)
-        
         target_pose.pose.orientation = self.yaw_to_quaternion(yaw)
 
         self.local_pos_pub.publish(target_pose)

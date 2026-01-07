@@ -23,8 +23,8 @@ class SyncedBroadcaster(Node):
         self.publish_static_tf()
         
         # 2. Publishers
-        # 2. Publishers
         self.depth_pub = self.create_publisher(Image, '/camera/depth_synced', 10)
+        self.odom_pub = self.create_publisher(Odometry, '/camera/odom_synced', 10)
         self.info_pub = self.create_publisher(CameraInfo, '/camera/camera_info_synced', 10)
 
         # 3. State: Odom Buffer (Time -> Msg)
@@ -51,6 +51,7 @@ class SyncedBroadcaster(Node):
             self.depth_callback,
             10
         )
+
         self.info_sub = self.create_subscription(
             CameraInfo,
             '/camera/camera_info',
@@ -191,11 +192,19 @@ class SyncedBroadcaster(Node):
         msg.header.frame_id = 'camera_link_optical'
         self.depth_pub.publish(msg)
         
+        # Publish Synced Odom (Exact same timestamp)
+        # We must update header to match image
+        best_odom.header.stamp = msg.header.stamp
+        # Frame remains 'map' -> 'base_link' (as per Odom convention)
+        self.odom_pub.publish(best_odom)
+        
         # Forward Info (Synced Header)
         info_msg = self.latest_camera_info
         info_msg.header.stamp = msg.header.stamp
         info_msg.header.frame_id = 'camera_link_optical'
         self.info_pub.publish(info_msg)
+
+
 
     def info_callback(self, msg):
         self.latest_camera_info = msg

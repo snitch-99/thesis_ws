@@ -11,8 +11,22 @@ The goal of this project is to develop a framework for updating a coarse prior m
     - `drone_mapping`: Package for drone-based point cloud collection and control.
         - `models/entities`: Contains simulation objects (e.g., rocks).
         - `models/agents`: Contains drone configurations.
+    - `drone_interfaces`: Package containing custom ROS 2 message definitions (e.g., `SyncedPointCloud`).
 
 ---
+
+## System Architecture
+
+### Two-Package Setup
+The project uses a modular two-package architecture:
+1.  **`drone_interfaces`**: 
+    - Purely defines custom message types (e.g., `SyncedPointCloud`).
+    - Ensures clean separation of interface definitions from implementation logic.
+    - Builds as an `ament_cmake` package to support IDL generation.
+2.  **`drone_mapping`**:
+    - Contains the core Python logic (`ament_python` build type).
+    - Implements nodes for simulation, control, and data processing.
+    - Imports messages from `drone_interfaces`.
 
 ## Drone Mapping System
 
@@ -74,3 +88,27 @@ We use `depth_image_proc` to generate 3D point clouds.
 The `traversability` node implements a circular orbit strategy:
 - **Logic**: Generates waypoints around a target center using `drone_utils/trajectory_generator.py`.
 - **Behavior**: The drone orbits the target while continuously facing the center.
+
+## Challenges & Solutions
+
+### 1. Point Cloud Instability & Drift
+**Problem**: Initial point clouds were unstable and drifted significantly in RViz, even when the drone was hovering.
+**Root Cause**: The default timestamps from PX4/MAVROS (Odometry) and Gazebo (Camera) were loosely coupled. Depth projection uses the TF tree at the *exact* timestamp of the image. Mismatches caused the projection to use an outdated or future robot pose, resulting in "smearing" or "jittering" of the point cloud.
+**Solution**: Implemented `synced_broadcaster.py`:
+- **Buffers** high-frequency Odometry data.
+- **Interpolates** the robot pose to the **exact nanosecond timestamp** of each incoming depth frame.
+- **Publishes** the TF transform `map -> base_link` with that specific timestamp.
+- **Result**: Perfectly registered point clouds that remain stable during motion.
+
+### 2. Coordinate Frame Hell (NED vs ENU vs Optical)
+**Problem**: The drone would fly correctly but the camera data pointed at the sky or was mirrored.
+**Context**: 
+- **PX4** uses FRD (Forward-Right-Down) body frame and NED (North-East-Down) world frame.
+- **ROS 2** uses FLU (Forward-Left-Up) body frame and ENU (East-North-Up) world frame.
+- **Cameras** use Optical frames (Z-Forward, X-Right, Y-Down).
+**Solution**: 
+- Strict adherence to ROS REP-103 standards.
+- Manually defined static transforms in `synced_broadcaster` to bridge the gap:
+    - `base_link` (FLU) -> `camera_link` (Physical Mount).
+    - `camera_link` -> `camera_link_optical` (Optical Rotation).
+- MAVROS handles the FRD <-> FLU conversion automatically, but the camera frames required explicit management.

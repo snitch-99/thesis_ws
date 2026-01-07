@@ -39,6 +39,7 @@ setup(
             'mavros_control = drone_mapping.mavros_control:main',
 
             'synced_broadcaster = drone_mapping.synced_broadcaster:main',
+            'rosbag_recorder = drone_utils.rosbag_recorder:main',
         ],
     },
 )
