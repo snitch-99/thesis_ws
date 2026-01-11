@@ -11,11 +11,12 @@ def generate_launch_description():
     qgc_path = os.path.join(home_dir, 'QGroundControl-x86_64.AppImage')
     drone_mapping_share = get_package_share_directory('drone_mapping')
     models_path = os.path.join(drone_mapping_share, 'models', 'entities')
+    agents_path = os.path.join(drone_mapping_share, 'models', 'agents')
 
     # Env Vars
     set_gz_resource_path = AppendEnvironmentVariable(
         name='GZ_SIM_RESOURCE_PATH',
-        value=models_path
+        value=f"{models_path}:{agents_path}"
     )
 
     # --- DEFINITIONS ---
@@ -49,14 +50,27 @@ def generate_launch_description():
 
     # 4. Spawning Rock (Target for Orbit)
     spawn_rock = Node(
+         package='ros_gz_sim',
+         executable='create',
+         arguments=[
+             '-name', 'rock',
+             '-x', '5.0',
+             '-y', '-5.0',
+             '-z', '0.5',
+             '-file', os.path.join(models_path, 'rock', 'model.sdf')
+         ],
+         output='screen'
+        )
+
+    spawn_cube = Node(
         package='ros_gz_sim',
         executable='create',
         arguments=[
-            '-name', 'rock',
+            '-name', 'cube',
             '-x', '5.0',
             '-y', '-5.0',
             '-z', '0.5',
-            '-file', os.path.join(models_path, 'rock', 'model.sdf')
+            '-file', os.path.join(models_path, 'cube', 'model.sdf')
         ],
         output='screen'
     )
@@ -88,11 +102,16 @@ def generate_launch_description():
         executable='parameter_bridge',
         arguments=[
             '/depth_camera@sensor_msgs/msg/Image@gz.msgs.Image',
-            '/camera_info@sensor_msgs/msg/CameraInfo@gz.msgs.CameraInfo'
+            '/camera_info@sensor_msgs/msg/CameraInfo@gz.msgs.CameraInfo',
+            '/world/default/model/x500_depth_0/link/camera_link/sensor/IMX214/image@sensor_msgs/msg/Image@gz.msgs.Image',
+            '/model/x500_depth_0/odometry@nav_msgs/msg/Odometry@gz.msgs.Odometry',
+            '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock'
         ],
         remappings=[
             ('/depth_camera', '/camera/depth'),
-            ('/camera_info', '/camera/camera_info')
+            ('/camera_info', '/camera/camera_info'),
+            ('/world/default/model/x500_depth_0/link/camera_link/sensor/IMX214/image', '/camera/rgb'),
+            ('/model/x500_depth_0/odometry', '/ground_truth/odom')
         ],
         parameters=[{'use_sim_time': True}],
         output='screen'
@@ -107,27 +126,6 @@ def generate_launch_description():
     )
 
 
-    # 10. Depth to Point Cloud Node
-    depth_to_pointcloud = Node(
-        package='depth_image_proc',
-        executable='point_cloud_xyz_node',
-        name='depth_to_pointcloud',
-        parameters=[{'use_sim_time': True}],
-        output='screen',
-        remappings=[
-            ('image_rect', '/camera/depth_synced'),
-            ('camera_info', '/camera/camera_info_synced'),
-            ('points', '/camera/points')
-        ]
-    )
-
-    # 11. Rosbag Recorder (Synced Packet)
-    rosbag_recorder = Node(
-        package='drone_mapping',
-        executable='rosbag_recorder',
-        output='screen'
-    )
-
     # --- SEQUENCE ---
     # T=0s: QGC (Start immediately)
     
@@ -140,11 +138,23 @@ def generate_launch_description():
     # T=15s: Spawn Rock (Wait for Gazebo)
     delayed_rock = TimerAction(period=15.0, actions=[spawn_rock])
 
+    # T=15s: Spawn Cube (Wait for Gazebo)
+    delayed_cube = TimerAction(period=15.0, actions=[spawn_cube])
+
     # T=18s: Traversability Node (Wait for MAVROS)
     delayed_traversability = TimerAction(period=20.0, actions=[traversability_node])
 
     # T=22s: Mavros Control Node (Last)
     delayed_control = TimerAction(period=24.0, actions=[mavros_control_node])
+
+    # 12. RTAB-Map
+    rtabmap_launch = ExecuteProcess(
+        cmd=[
+            'gnome-terminal', '--title=RTAB-Map', '--', 'bash', '-c',
+            'ros2 launch drone_mapping rtabmap.launch.py; exec bash'
+        ],
+        output='screen'
+    )
 
     return LaunchDescription([
         set_gz_resource_path,
@@ -152,11 +162,10 @@ def generate_launch_description():
         delayed_px4,
         delayed_mavros,
         delayed_rock,
+        #delayed_cube,
         bridge,
         delayed_traversability,
         delayed_control,
         synced_broadcaster,
-        depth_to_pointcloud,
-        rosbag_recorder,
-
+        rtabmap_launch
     ])

@@ -1,0 +1,124 @@
+<?xml version="1.0" ?>
+<sdf version="1.9">
+  <model name="cube">
+    <static>true</static>
+    <link name="link">
+      <inertial>
+        <mass>1.0</mass>
+        <inertia>
+          <ixx>0.166667</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>0.166667</iyy>
+          <iyz>0</iyz>
+          <izz>0.166667</izz>
+        </inertia>
+      </inertial>
+      
+      <!-- Collision Box -->
+      <collision name="collision">
+        <geometry>
+          <box>
+            <size>1 1 1</size>
+          </box>
+        </geometry>
+      </collision>
+
+      <!-- Face 1: Front (Positive X) -->
+      <visual name="face_front">
+        <pose>0.5 0 0 0 0 0</pose> <!-- Offset to face -->
+        <geometry>
+          <box>
+            <size>0.001 1 1</size> <!-- Thin plane-like box -->
+          </box>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+          <pbr>
+            <metal>
+              <albedo_map>model://cube/textures/texture.jpeg</albedo_map>
+            </metal>
+          </pbr>
+        </material>
+      </visual>
+
+      <!-- Face 2: Back (Negative X) -->
+      <visual name="face_back">
+        <pose>-0.5 0 0 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.001 1 1</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+          <pbr>
+            <metal>
+              <albedo_map>model://cube/textures/texture2.jpeg</albedo_map>
+            </metal>
+          </pbr>
+        </material>
+      </visual>
+
+      <!-- Face 3: Left (Positive Y) -->
+      <visual name="face_left">
+        <pose>0 0.5 0 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>1 0.001 1</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+          <pbr>
+            <metal>
+              <albedo_map>model://cube/textures/texture3.jpeg</albedo_map>
+            </metal>
+          </pbr>
+        </material>
+      </visual>
+
+      <!-- Face 4: Right (Negative Y) -->
+      <visual name="face_right">
+        <pose>0 -0.5 0 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>1 0.001 1</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+          <pbr>
+            <metal>
+              <albedo_map>model://cube/textures/texture4.jpeg</albedo_map>
+            </metal>
+          </pbr>
+        </material>
+      </visual>
+
+      <!-- Face 5: Top (Positive Z) -->
+      <visual name="face_top">
+        <pose>0 0 0.5 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>1 1 0.001</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+          <pbr>
+            <metal>
+              <albedo_map>model://cube/textures/texture5.jpeg</albedo_map>
+            </metal>
+          </pbr>
+        </material>
+      </visual>
+
+    </link>
+  </model>
+</sdf>

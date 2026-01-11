@@ -2,7 +2,7 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped
 from mavros_msgs.msg import State
-from drone_utils.trajectory_generator import generate_orbit
+from drone_utils.trajectory_generator import generate_trajectory
 import math
 
 class TraversabilityNode(Node):
@@ -23,15 +23,19 @@ class TraversabilityNode(Node):
         self.height    = 1.0
         self.threshold = 0.2 # meters
 
+        self.trajectory_type = 1 # 0: Circle, 1: Square
+        
         # Generate Waypoints
         # 0.1 radians ~ 5.7 degrees angular resolution
         # Pass Home (0,0) to start orbit at the closest point
-        self.waypoints = generate_orbit(
+        self.waypoints = generate_trajectory(
+                         self.trajectory_type,
                          self.center_x, 
                          self.center_y, 
                          self.radius, 
                          self.height, 
-                         0.1,
+                         angular_resolution=0.1,
+                         step_size=0.5,
                          home_x=0.0,
                          home_y=0.0
                         )

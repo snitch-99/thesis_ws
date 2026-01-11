@@ -10,10 +10,15 @@ from sensor_msgs.msg import CameraInfo
 
 import collections
 import bisect
+import cv2
+from cv_bridge import CvBridge
 
 class SyncedBroadcaster(Node):
     def __init__(self):
         super().__init__('synced_broadcaster')
+        
+        # Tools
+        self.bridge = CvBridge()
         
         # 1. Broadcasters
         self.tf_broadcaster = TransformBroadcaster(self)
@@ -24,6 +29,7 @@ class SyncedBroadcaster(Node):
         
         # 2. Publishers
         self.depth_pub = self.create_publisher(Image, '/camera/depth_synced', 10)
+        self.rgb_pub = self.create_publisher(Image, '/camera/rgb_synced', 10)
         self.odom_pub = self.create_publisher(Odometry, '/camera/odom_synced', 10)
         self.info_pub = self.create_publisher(CameraInfo, '/camera/camera_info_synced', 10)
 
@@ -32,6 +38,7 @@ class SyncedBroadcaster(Node):
         # 3. State: Odom Buffer (Time -> Msg)
         # Store tuples of (nanoseconds, msg)
         self.odom_buffer = collections.deque(maxlen=100)
+        self.rgb_buffer = collections.deque(maxlen=100)
         self.latest_camera_info = None
 
         # 4. JSON QoS for Odom (Best Effort)
@@ -58,7 +65,25 @@ class SyncedBroadcaster(Node):
             self.info_callback,
             qos_profile_sensor_data
         )
-        self.get_logger().info('Synced Broadcaster: Odom Interpolation Enabled')
+
+        self.rgb_sub = self.create_subscription(
+            Image,
+            '/camera/rgb',
+            self.rgb_callback,
+            qos_profile_sensor_data
+        )
+
+        self.gt_buffer = collections.deque(maxlen=100)
+        self.use_ground_truth = True 
+
+        # 6. Subscribers
+        self.gt_sub = self.create_subscription(
+            Odometry,
+            '/ground_truth/odom',
+            self.gt_callback,
+            qos_profile_sensor_data
+        )
+        self.get_logger().info('Synced Broadcaster: Odom Interpolation Enabled (Ground Truth Priority)')
 
     def publish_static_tf(self):
         # 1. Physical Mount (base_link -> camera_link)
@@ -97,16 +122,50 @@ class SyncedBroadcaster(Node):
         t_optical.transform.rotation.z = -0.5
         t_optical.transform.rotation.w = 0.5
         
-        # Send both
+        # Send all
         self.static_broadcaster.sendTransform([t_mount, t_optical])
+
+
+
+
+    def gt_callback(self, msg):
+        t_ns = msg.header.stamp.sec * 1_000_000_000 + msg.header.stamp.nanosec
+        self.gt_buffer.append((t_ns, msg))
 
     def odom_callback(self, msg):
         # Store (time_in_ns, msg)
         t_ns = msg.header.stamp.sec * 1_000_000_000 + msg.header.stamp.nanosec
         self.odom_buffer.append((t_ns, msg))
 
+    def rgb_callback(self, msg):
+        # Simply forward the RGB image but sync its timestamp
+        # We NO LONGER resize to 640x480. We trust the source resolution.
+        
+        # Store (time_in_ns, msg)
+        t_ns = msg.header.stamp.sec * 1_000_000_000 + msg.header.stamp.nanosec
+        self.rgb_buffer.append((t_ns, msg))
+
+
+
+
+    def normalize_quaternion(self, q):
+        norm = (q.x**2 + q.y**2 + q.z**2 + q.w**2)**0.5
+        if norm == 0:
+            return q
+        q.x /= norm
+        q.y /= norm
+        q.z /= norm
+        q.w /= norm
+        return q
+
     def get_interpolated_odom(self, target_time_ns):
-        if not self.odom_buffer:
+        # Decide which buffer to use
+        if self.use_ground_truth:
+            buffer = self.gt_buffer
+        else:
+            buffer = self.odom_buffer
+
+        if not buffer:
             return None
 
         # If only one message, use it
@@ -114,22 +173,22 @@ class SyncedBroadcaster(Node):
             return self.odom_buffer[0][1]
 
         # Extract timestamps for binary search
-        times = [t for t, m in self.odom_buffer]
+        times = [t for t, m in buffer]
         
         # Find insertion point
         idx = bisect.bisect_left(times, target_time_ns)
 
         # Exact match or beyond last element (use last)
         if idx == len(times):
-            return self.odom_buffer[-1][1]
+            return buffer[-1][1]
         
         # Before first element (use first)
         if idx == 0:
-            return self.odom_buffer[0][1]
+            return buffer[0][1]
 
         # Interpolate between idx-1 and idx
-        t1, msg1 = self.odom_buffer[idx-1]
-        t2, msg2 = self.odom_buffer[idx]
+        t1, msg1 = buffer[idx-1]
+        t2, msg2 = buffer[idx]
 
         # Calculate alpha
         if t2 == t1:
@@ -140,6 +199,7 @@ class SyncedBroadcaster(Node):
         # Interpolate Position
         p1 = msg1.pose.pose.position
         p2 = msg2.pose.pose.position
+        p2.z = p2.z
         
         # Create interpolated Odom-like structure (just what we need)
         # We can re-use msg1 as container but update position/orientation
@@ -150,8 +210,7 @@ class SyncedBroadcaster(Node):
         start_msg.pose.pose.position.y = p1.y + alpha * (p2.y - p1.y)
         start_msg.pose.pose.position.z = p1.z + alpha * (p2.z - p1.z)
         
-        # Slerp for Orientation would be better, but Lerp is acceptable for small deltas
-        # (Assuming 50Hz Odom, deltas are small)
+        # N-LERP for Orientation (Normalize after Lerp)
         q1 = msg1.pose.pose.orientation
         q2 = msg2.pose.pose.orientation
         
@@ -160,14 +219,51 @@ class SyncedBroadcaster(Node):
         start_msg.pose.pose.orientation.z = q1.z + alpha * (q2.z - q1.z)
         start_msg.pose.pose.orientation.w = q1.w + alpha * (q2.w - q1.w)
         
+        # CRITICAL: Normalize to ensure valid rotation (fixes "dips")
+        start_msg.pose.pose.orientation = self.normalize_quaternion(start_msg.pose.pose.orientation)
+        
         return start_msg
+
+    def get_closest_rgb(self, target_time_ns):
+        # Simple closest search
+        if not self.rgb_buffer:
+            return None
+            
+        best_msg = None
+        min_diff = float('inf')
+        
+        # Search recent buffer (optimization: check from end)
+        # For now, linear scan is fine for small buffer (100)
+        # Or binary search if we trust monotonicity (we should)
+        
+        times = [t for t, m in self.rgb_buffer]
+        idx = bisect.bisect_left(times, target_time_ns)
+        
+        candidates = []
+        if idx < len(times):
+            candidates.append(idx)
+        if idx > 0:
+            candidates.append(idx - 1)
+            
+        for i in candidates:
+            diff = abs(times[i] - target_time_ns)
+            if diff < min_diff:
+                min_diff = diff
+                best_msg = self.rgb_buffer[i][1]
+                
+        # threshold: e.g. 33ms (1 frame at 30fps)
+        if min_diff > 0.05 * 1e9: # 50ms tolerance
+            return None
+            
+        return best_msg
 
     def depth_callback(self, msg):
         target_ns = msg.header.stamp.sec * 1_000_000_000 + msg.header.stamp.nanosec
         
         best_odom = self.get_interpolated_odom(target_ns)
+        best_rgb = self.get_closest_rgb(target_ns)
         
-        if best_odom is None:
+        if best_odom is None or best_rgb is None:
             return
             
         # We need Camera Info to be valid
@@ -178,11 +274,14 @@ class SyncedBroadcaster(Node):
         
         # CRITICAL: Use the Image's timestamp
         t.header.stamp = msg.header.stamp
-        t.header.frame_id = 'map'
+        t.header.frame_id = 'odom'
         t.child_frame_id = 'base_link'
         
         t.transform.translation.x = best_odom.pose.pose.position.x
         t.transform.translation.y = best_odom.pose.pose.position.y
+        t.transform.translation.z = best_odom.pose.pose.position.z
+        t.transform.rotation = best_odom.pose.pose.orientation
+        
         t.transform.translation.z = best_odom.pose.pose.position.z
         t.transform.rotation = best_odom.pose.pose.orientation
         
@@ -195,7 +294,8 @@ class SyncedBroadcaster(Node):
         # Publish Synced Odom (Exact same timestamp)
         # We must update header to match image
         best_odom.header.stamp = msg.header.stamp
-        # Frame remains 'map' -> 'base_link' (as per Odom convention)
+        # Frame remains 'odom' -> 'base_link'
+        best_odom.header.frame_id = 'odom'
         self.odom_pub.publish(best_odom)
         
         # Forward Info (Synced Header)
@@ -203,6 +303,11 @@ class SyncedBroadcaster(Node):
         info_msg.header.stamp = msg.header.stamp
         info_msg.header.frame_id = 'camera_link_optical'
         self.info_pub.publish(info_msg)
+
+        # Forward Synced RGB (Same header as Depths)
+        best_rgb.header.stamp = msg.header.stamp
+        best_rgb.header.frame_id = 'camera_link_optical'
+        self.rgb_pub.publish(best_rgb)
 
 
 

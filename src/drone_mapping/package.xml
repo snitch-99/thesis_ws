@@ -13,6 +13,7 @@
   <depend>mavros_msgs</depend>
   <exec_depend>depth_image_proc</exec_depend>
   <depend>drone_interfaces</depend>
+  <depend>cv_bridge</depend>
 
 
   <test_depend>ament_copyright</test_depend>

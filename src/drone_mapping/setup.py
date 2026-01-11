@@ -21,6 +21,9 @@ setup(
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name), glob('launch/*.launch.py')),
         (os.path.join('share', package_name, 'models/entities/rock'), glob('models/entities/rock/*')),
+        (os.path.join('share', package_name, 'models/entities/cube'), glob('models/entities/cube/*.config') + glob('models/entities/cube/*.sdf')),
+        (os.path.join('share', package_name, 'models/entities/cube/textures'), glob('models/entities/cube/textures/*')),
+        (os.path.join('share', package_name, 'models/entities/cube/textures'), glob('models/entities/cube/textures/*')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -39,7 +42,7 @@ setup(
             'mavros_control = drone_mapping.mavros_control:main',
 
             'synced_broadcaster = drone_mapping.synced_broadcaster:main',
-            'rosbag_recorder = drone_utils.rosbag_recorder:main',
+
         ],
     },
 )
