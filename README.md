@@ -43,6 +43,8 @@ The `drone_mapping` package provides the core simulation and data collection pip
 - Gazebo Garden/Harmonic
 - `ros_gz_bridge`
 - `depth_image_proc` (for point cloud generation)
+- `rtabmap_ros` (for SLAM)
+- `cv_bridge`
 - `mavros` & `mavros_extras`
 - PX4 Autopilot (for SITL)
 
@@ -58,6 +60,12 @@ source install/setup.bash
 This launch file starts Gazebo, the PX4 SITL bridge, MAVROS, and the Point Cloud processing pipeline.
 ```bash
 ros2 launch drone_mapping simulation.launch.py
+```
+
+#### 3. Launch RTAB-Map (SLAM)
+This launches RTAB-Map for 3D mapping and loop closure detection.
+```bash
+ros2 launch drone_mapping rtabmap.launch.py
 ```
 
 #### 3. Visualization (RViz)
@@ -85,9 +93,9 @@ We use `depth_image_proc` to generate 3D point clouds.
     - Output: `/camera/points` (in `camera_link_optical` frame)
 
 #### Trajectory Generation
-The `traversability` node implements a circular orbit strategy:
-- **Logic**: Generates waypoints around a target center using `drone_utils/trajectory_generator.py`.
-- **Behavior**: The drone orbits the target while continuously facing the center.
+The `traversability` node implements multiple trajectory patterns using `drone_utils/trajectory_generator.py`:
+- **Patterns**: Circular, Square.
+- **Behavior**: The drone traverses the generated waypoints while maintaining a specific heading (facing center for Orbit).
 
 ## Challenges & Solutions
 
