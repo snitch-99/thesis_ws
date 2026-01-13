@@ -120,3 +120,30 @@ The `traversability` node implements multiple trajectory patterns using `drone_u
     - `base_link` (FLU) -> `camera_link` (Physical Mount).
     - `camera_link` -> `camera_link_optical` (Optical Rotation).
 - MAVROS handles the FRD <-> FLU conversion automatically, but the camera frames required explicit management.
+
+## Change Detection & Point Cloud Segregation
+We are currently developing a system to detect changes between a high-resolution scan and a base model.
+
+### Workflow
+1.  **Segregation**: 
+    - Incoming point clouds are processed to remove the ground plane (using RANSAC).
+    - Remaining objects are clustered using Euclidean Clustering (DBSCAN) to separate distinct entities (e.g., rocks, obstacles).
+2.  **Descriptor Assignment**:
+    - Each cluster is analyzed to extract key properties, forming a unique descriptor:
+        - **Centroid**: (x, y, z) position.
+        - **Bounding Box**: Axis-aligned geometric extent.
+        - **Dimensions**: Width, Height, Depth.
+        - **Point Count**: Density/Volume proxy.
+3.  **Change Detection (Upcoming)**:
+    - These descriptors act as signatures.
+    - By comparing the descriptors of current clusters against a database of known objects (from the coarse mesh or previous scans), we can identify:
+        - **New Objects**: Clusters with no matching descriptor.
+        - **Moved Objects**: Matching dimensions but different locations.
+        - **Deformations**: Matching location but different dimensions.
+
+### Implementation
+- The logic is encapsulated in `src/point_cloud_processing/src/visualize_pcd.py`.
+- **Modular Design**:
+    - `cluster_filtering`: Handles ground removal and DBSCAN clustering.
+    - `cluster_properties`: Computes and assigns descriptors (centroid, bbox, etc.) to each cluster.
+
