@@ -75,6 +75,20 @@ def generate_launch_description():
         output='screen'
     )
 
+    spawn_rock2 = Node(
+        package='ros_gz_sim',
+        executable='create',
+        arguments=[
+            '-name', 'rock2',
+            '-x', '8.0',
+            '-y', '-8.0',
+            '-z', '-0.2',
+            '-R', '1.5708',
+            '-file', os.path.join(models_path, 'rock2', 'model.sdf')
+        ],
+        output='screen'
+    )
+
     # 5. Traversability Node
     traversability_node = ExecuteProcess(
         cmd=[
@@ -141,6 +155,9 @@ def generate_launch_description():
     # T=15s: Spawn Cube (Wait for Gazebo)
     delayed_cube = TimerAction(period=15.0, actions=[spawn_cube])
 
+    # T=15s: Spawn Rock2 (Wait for Gazebo)
+    delayed_rock2 = TimerAction(period=15.0, actions=[spawn_rock2])
+
     # T=18s: Traversability Node (Wait for MAVROS)
     delayed_traversability = TimerAction(period=20.0, actions=[traversability_node])
 
@@ -163,6 +180,7 @@ def generate_launch_description():
         delayed_mavros,
         delayed_rock,
         #delayed_cube,
+        delayed_rock2,
         bridge,
         delayed_traversability,
         delayed_control,

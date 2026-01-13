@@ -19,8 +19,8 @@ class TraversabilityNode(Node):
         # Orbit Parameters
         self.center_x  = 5.0
         self.center_y  = -5.0
-        self.radius    = 5.0
-        self.height    = 1.0
+        self.radius    = 7.0
+        self.height    = 1.2
         self.threshold = 0.2 # meters
 
         self.trajectory_type = 1 # 0: Circle, 1: Square
