@@ -122,7 +122,7 @@ The `traversability` node implements multiple trajectory patterns using `drone_u
 - MAVROS handles the FRD <-> FLU conversion automatically, but the camera frames required explicit management.
 
 ## Change Detection & Point Cloud Segregation
-We are currently developing a system to detect changes between a high-resolution scan and a base model.
+We have implemented a robust system to detect changes between a high-resolution scan and a base model.
 
 ### Workflow
 1.  **Segregation**: 
@@ -134,16 +134,23 @@ We are currently developing a system to detect changes between a high-resolution
         - **Bounding Box**: Axis-aligned geometric extent.
         - **Dimensions**: Width, Height, Depth.
         - **Point Count**: Density/Volume proxy.
-3.  **Change Detection (Upcoming)**:
-    - These descriptors act as signatures.
-    - By comparing the descriptors of current clusters against a database of known objects (from the coarse mesh or previous scans), we can identify:
-        - **New Objects**: Clusters with no matching descriptor.
-        - **Moved Objects**: Matching dimensions but different locations.
-        - **Deformations**: Matching location but different dimensions.
+        - **Fractal Dimension**: Metric for surface complexity (e.g., ~2.04 for rocks).
+        - **PCA Analysis**: Eigenvalues and Eigenvectors to determine object orientation and principal axes.
+3.  **Change Detection**:
+    - We employ a `compare_clusters` function that checks the Euclidean distance between centroids, dimensions, eigenvalues, and eigenvectors (handling sign ambiguity).
+    - **Threshold**: A delta threshold (e.g., 1.5) determines if an object is a match or new.
+    - **New Objects**: Clusters with no matching descriptor in the base database are flagged as **New Objects** and saved to `scene_delta.ply`.
+    
+### Visualization
+The `visualize_pcd.py` script now launches three parallel Open3D windows:
+1.  **Base Cloud**: The original environment.
+2.  **Changed Cloud**: The new scan containing updates.
+3.  **New Objects Detected**: A dedicated view isolating only the new or changed entities, highlighted in Red.
+Values are visualized with a 30m Grid and Coordinate Frames for reference.
 
 ### Implementation
 - The logic is encapsulated in `src/point_cloud_processing/src/visualize_pcd.py`.
 - **Modular Design**:
     - `cluster_filtering`: Handles ground removal and DBSCAN clustering.
-    - `cluster_properties`: Computes and assigns descriptors (centroid, bbox, etc.) to each cluster.
-
+    - `cluster_properties`: Computes and assigns descriptors (centroid, bbox, PCA, Fractal Dim) to each cluster.
+    - `compare_clusters`: Logic for differencing and matching objects.
