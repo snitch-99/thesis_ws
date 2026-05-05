@@ -7,13 +7,8 @@ from ament_index_python.packages import get_package_share_directory
 import os
 
 def generate_launch_description():
-    
-    # We use the rtabmap_ros package from the rtabmap workspace
-    # Since it's in a different workspace, get_package_share_directory might fail if not sourced.
-    # We assume the user has sourced the rtabmap workspace.
-    
+
     try:
-        # Check if we can find rtabmap_launch
         rtabmap_launch_dir = get_package_share_directory('rtabmap_launch')
         rtabmap_launch_file = os.path.join(rtabmap_launch_dir, 'launch', 'rtabmap.launch.py')
     except Exception as e:
@@ -21,7 +16,6 @@ def generate_launch_description():
         raise e
 
     return LaunchDescription([
-        # Launch RTAB-Map
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(rtabmap_launch_file),
             launch_arguments={
@@ -29,32 +23,33 @@ def generate_launch_description():
                 'subscribe_depth': 'true',
                 'bg_color': '0 0 0',
                 'use_sim_time': 'true',
-                
-                # Topics (remapped to our synced topics)
-                'rgb_topic': '/camera/rgb_synced',
-                'depth_topic': '/camera/depth_synced',
-                'camera_info_topic': '/camera/camera_info_synced',
-                'odom_topic': '/camera/odom_synced',
-                
-                # Synchronization (We do it manually in synced_broadcaster)
-                'approx_sync': 'false', # Exact sync required since we produce exact timestamps
-                'queue_size': '50',
+
+                # Topics (frame_id corrected by synced_broadcaster)
+                'rgb_topic': '/camera/rgb_corrected',
+                'depth_topic': '/camera/depth_corrected',
+                'camera_info_topic': '/camera/camera_info_corrected',
+                'odom_topic': '/ground_truth/odom',
+
+                # RTAB-Map handles synchronization
+                'approx_sync': 'true',
+                'approx_sync_max_interval': '0.1',
+                'queue_size': '100',
                 'wait_for_transform': '1.0',
-                
+
                 # Frames
                 'map_frame_id': 'map',
                 'odom_frame_id': 'odom',
-                'visual_odometry': 'false', # We provide external odometry
+                'visual_odometry': 'false',
                 'icp_odometry': 'false',
-                
-                # QoS (Match synced_broadcaster)
-                'qos': '1', # Reliable
-                
+
+                # QoS
+                'qos': '1',
+
                 # RTAB-Map Args
-                # --delete_db_on_start: Fresh map every time
-                # --Optimizer/GravitySigma 0.3: Relax gravity constraint if needed
-                'args': '--delete_db_on_start',
-                
+                'args': '--delete_db_on_start --Grid/RangeMax 15.0 --Grid/CellSize 0.01',
+                'cloud_voxel_size': '0.0',
+                'cloud_decimation': '1',
+
                 # Visualization
                 'rtabmap_viz': 'true',
                 'rviz': 'false',

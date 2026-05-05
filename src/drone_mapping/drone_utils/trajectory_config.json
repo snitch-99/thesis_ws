@@ -1,0 +1,11 @@
+{
+  "trajectory_type": 0,
+  "center_x": 5.0,
+  "center_y": -5.0,
+  "radius": 6.5,
+  "height": 0.9999999999999999,
+  "step_size": 0.5,
+  "angular_resolution": 0.1,
+  "threshold": 0.2,
+  "num_waypoints": 64
+}
