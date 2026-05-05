@@ -1,221 +1,224 @@
-# Selective Mesh Refinement for Robotic Mapping
+# thesis_ws
 
-This repository contains the work for the thesis on "Selective Mesh Refinement".
+**Autonomous Rock Detection Pipeline — Active Gaussian Splatting for Planetary Reconstruction**
+*(IEEE CASE 2026)*
 
-## Overview
-The goal of this project is to develop a framework for updating a coarse prior mesh model using high-resolution local point cloud data collected by a robotic platform (e.g., a drone). The core idea is to transmit only the significant geometric updates (discrepancies) to a base station, respecting bandwidth constraints.
-
-## Structure
-- **Documents/**: Contains the thesis proposal and related documentation.
-- **src/**: Source code for the robotic implementation (ROS 2 packages).
-    - `drone_mapping`: Package for drone-based point cloud collection and control.
-        - `models/entities`: Contains simulation objects (e.g., rocks).
-        - `models/agents`: Contains drone configurations.
-    - `drone_interfaces`: Package containing custom ROS 2 message definitions (e.g., `SyncedPointCloud`).
+A ROS2 (Humble) workspace that flies a drone over a simulated planetary surface, maps it with RTABMAP, and detects rocks from the accumulated point cloud using a 3-phase geometric pipeline. Detected rock point clouds feed directly into the compression and NBV planning stages of the thesis.
 
 ---
 
-## System Architecture
+## Overview
 
-### Two-Package Setup
-The project uses a modular two-package architecture:
-1.  **`drone_interfaces`**: 
-    - Purely defines custom message types (e.g., `SyncedPointCloud`).
-    - Ensures clean separation of interface definitions from implementation logic.
-    - Builds as an `ament_cmake` package to support IDL generation.
-2.  **`drone_mapping`**:
-    - Contains the core Python logic (`ament_python` build type).
-    - Implements nodes for simulation, control, and data processing.
-    - Imports messages from `drone_interfaces`.
+```
+PX4 SITL + Gazebo Harmonic
+        │  drone flies lawnmower survey pattern
+        ▼
+RTABMAP (Visual SLAM)
+        │  /rtabmap/cloud_map  (accumulated point cloud)
+        │  /rtabmap/info       (loop closure events)
+        ▼
+Phase 1 — RANSAC Ground Removal        (every frame)
+        │  → non-ground points + ground normal
+        ▼
+Phase 2 — DBSCAN Clustering + Centroid Tracking  (every frame)
+        │  → TrackedCluster objects with stability history
+        ▼
+Phase 3 — Geometric Stability Tracking (loop-closure gated)
+        │  → PCA, eigenvector comparison, planarity filter
+        ▼
+Saved PLY files per rock cluster
+        │
+        ▼
+[Compression + NBV Planning — thesis contributions, separate pipeline]
+```
 
-## Drone Mapping System
+---
 
-The `drone_mapping` package provides the core simulation and data collection pipeline.
+## Repository Structure
 
-### Features
-- **Simulation**: Gazebo integration with PX4 SITL (Software In The Loop).
-- **Sensors**: Depth Camera (OakD-Lite model) integration.
-- **Mapping**: Real-time Point Cloud generation from depth images.
-- **Navigation**: Basic traversability analysis and trajectory generation.
+```
+thesis_ws/
+└── src/
+    └── drone_mapping/
+        ├── drone_mapping/          # ROS2 nodes
+        │   ├── cluster_tracker.py  # ★ Main node — orchestrates all 3 phases
+        │   ├── run_controller.py   # Flight control + auto-shutdown at N loop closures
+        │   ├── mavros_control.py   # MAVROS waypoint + arming interface
+        │   ├── synced_broadcaster.py # TF publisher with interpolated timestamps
+        │   └── traversability.py   # Lawnmower trajectory execution
+        ├── drone_utils/            # Pipeline library (no ROS dependency)
+        │   ├── phase1_ground_removal.py  # RANSAC ground plane removal
+        │   ├── phase2_clustering.py      # DBSCAN + centroid tracking
+        │   ├── phase3_geometric.py       # PCA, eigenvector stability, planarity filter
+        │   ├── metrics_logger.py         # CSV logging for cluster metrics
+        │   ├── trajectory_gui.py         # GUI for waypoint editing
+        │   └── plot_centroid_stability.py
+        ├── launch/
+        │   ├── drone_mapping.launch.py   # ★ Main launch file (full pipeline)
+        │   └── rtabmap.launch.py         # RTABMAP SLAM config
+        ├── models/
+        │   ├── agents/x500_depth_odom/   # Drone SDF (x500 + depth camera)
+        │   └── entities/                 # Rock models (rock–rock10) + terrain
+        ├── tools/
+        │   ├── plot_results.py           # Detection rate plots
+        │   ├── plot_pipeline_funnel.py   # Pipeline funnel chart
+        │   └── rock_spawner_gui.py       # GUI for manual rock placement
+        └── config/
+            ├── mavros_config.yaml
+            └── trajectory_config.json
+```
 
-### Dependencies
-- ROS 2 Humble (or newer)
-- Gazebo Garden/Harmonic
+---
+
+## Dependencies
+
+- ROS2 Humble
+- Gazebo Harmonic
+- PX4 Autopilot (SITL) — `make px4_sitl gz_x500_depth`
+- MAVROS (`ros2 launch mavros px4.launch`)
+- RTABMAP ROS2 (`rtabmap_ros`)
 - `ros_gz_bridge`
-- `depth_image_proc` (for point cloud generation)
-- `rtabmap_ros` (for SLAM)
-- `cv_bridge`
-- `mavros` & `mavros_extras`
-- PX4 Autopilot (for SITL)
+- Python: `numpy`, `scipy`, `scikit-learn`, `open3d`
 
-### Usage
+---
 
-#### 1. Build the Package
+## Quick Start
+
+### 1. Build
+
 ```bash
+cd thesis_ws
 colcon build --packages-select drone_mapping
 source install/setup.bash
 ```
 
-#### 2. Launch Simulation
-This launch file starts Gazebo, the PX4 SITL bridge, MAVROS, and the Point Cloud processing pipeline.
-```bash
-ros2 launch drone_mapping simulation.launch.py
+### 2. Configure the experiment
+
+Edit the top of `src/drone_mapping/launch/drone_mapping.launch.py`:
+
+```python
+NUM_ROCKS     = 5     # 1–10: how many rocks to spawn in the scene
+TRIAL_ID      = 1     # trial index for output file naming
+HEADLESS_MODE = True  # False to show Gazebo GUI
 ```
 
-#### 3. Launch RTAB-Map (SLAM)
-This launches RTAB-Map for 3D mapping and loop closure detection.
+### 3. Launch the full pipeline
+
+```bash
+ros2 launch drone_mapping drone_mapping.launch.py
+```
+
+This starts everything in sequence:
+
+| Time | Process |
+|------|---------|
+| T=0s | QGroundControl |
+| T=5s | PX4 SITL |
+| T=8s | Spawn rocks + terrain in Gazebo |
+| T=12s | MAVROS |
+| T=20s | Traversability node + RTABMAP |
+| T=22s | Cluster Tracker node |
+| T=24s | MAVROS Control node |
+| T=25s | Run Controller node |
+
+The drone flies a lawnmower survey pattern and shuts down automatically after 6 loop closures (configurable in `run_controller.py`).
+
+### 4. Launch RTABMAP separately (optional)
+
 ```bash
 ros2 launch drone_mapping rtabmap.launch.py
 ```
 
-#### 3. Visualization (RViz)
-- **Fixed Frame**: `map`
-- **Point Cloud Topic**: `/camera/points`
-- **Image Topic**: `/camera/image_raw`
+---
 
-### Configuration Notes
+## The 3-Phase Rock Detection Pipeline
 
-#### TF Tree Configuration
-The TF tree is managed by `synced_broadcaster.py` to ensure high-fidelity timestamp synchronization:
-- **`map` -> `base_link`**: 
-    - Published by `synced_broadcaster` by interpolating `mavros/local_position/odom` to match the exact timestamp of depth images.
-- **`base_link` -> `camera_link`**:
-    - Physical mount frame (Identity rotation, Translation match SDF).
-- **`camera_link` -> `camera_link_optical`**:
-    - Standard optical rotation (Z-Forward, X-Right, Y-Down).
-    - All visual data (Depth, Point Clouds) is expressed in this frame.
+All tunable parameters are in the constants block at the top of `cluster_tracker.py`.
 
-#### Point Cloud Generation
-We use `depth_image_proc` to generate 3D point clouds.
-- **Synchronization**: `synced_broadcaster` ensures `camera_info` and `depth_image` have identical timestamps and correct Optical Frame IDs.
-- **Topics**: 
-    - Input: `/camera/depth_synced`, `/camera/camera_info_synced`
-    - Output: `/camera/points` (in `camera_link_optical` frame)
+### Phase 1 — RANSAC Ground Removal
+Runs on every `/rtabmap/cloud_map` frame. Fits a plane to the accumulated point cloud, strips ground points, and caches the plane normal for Phase 3's planarity filter.
 
-#### Trajectory Generation
-The `traversability` node implements multiple trajectory patterns using `drone_utils/trajectory_generator.py`:
-- **Patterns**: Circular, Square.
-- **Behavior**: The drone traverses the generated waypoints while maintaining a specific heading (facing center for Orbit).
+| Parameter | Default | Description |
+|---|---|---|
+| `RANSAC_DIST_THRESHOLD` | `0.05` m | Max distance from plane to count as ground |
+| `RANSAC_MAX_TRIALS` | `1000` | RANSAC iterations |
+| `PLANE_REUSE_THRESHOLD` | `0.80` | Reuse cached plane if ≥80% of points still fit |
 
-## Challenges & Solutions
+### Phase 2 — DBSCAN Clustering + Centroid Tracking
+Runs every frame on the non-ground points. Clusters with DBSCAN, then matches clusters across frames by centroid proximity to maintain stable `TrackedCluster` IDs.
 
-### 1. Point Cloud Instability & Drift
-**Problem**: Initial point clouds were unstable and drifted significantly in RViz, even when the drone was hovering.
-**Root Cause**: The default timestamps from PX4/MAVROS (Odometry) and Gazebo (Camera) were loosely coupled. Depth projection uses the TF tree at the *exact* timestamp of the image. Mismatches caused the projection to use an outdated or future robot pose, resulting in "smearing" or "jittering" of the point cloud.
-**Solution**: Implemented `synced_broadcaster.py`:
-- **Buffers** high-frequency Odometry data.
-- **Interpolates** the robot pose to the **exact nanosecond timestamp** of each incoming depth frame.
-- **Publishes** the TF transform `map -> base_link` with that specific timestamp.
-- **Result**: Perfectly registered point clouds that remain stable during motion.
+| Parameter | Default | Description |
+|---|---|---|
+| `DBSCAN_EPS` | `0.1` m | Neighbourhood radius |
+| `DBSCAN_MIN_SAMPLES` | `30` | Min points to form a core point |
+| `MIN_CLUSTER_SIZE` | `500` | Drop clusters smaller than this |
+| `MAX_MATCH_DISTANCE` | `2.0` m | Max centroid shift for ID match |
+| `CENTROID_WINDOW` | `5` | Frames for centroid consistency check |
+| `CENTROID_CONSISTENCY_THR` | `1.5` m | Max deviation from mean centroid to be active |
 
-### 2. Coordinate Frame Hell (NED vs ENU vs Optical)
-**Problem**: The drone would fly correctly but the camera data pointed at the sky or was mirrored.
-**Context**: 
-- **PX4** uses FRD (Forward-Right-Down) body frame and NED (North-East-Down) world frame.
-- **ROS 2** uses FLU (Forward-Left-Up) body frame and ENU (East-North-Up) world frame.
-- **Cameras** use Optical frames (Z-Forward, X-Right, Y-Down).
-**Solution**: 
-- Strict adherence to ROS REP-103 standards.
-- Manually defined static transforms in `synced_broadcaster` to bridge the gap:
-    - `base_link` (FLU) -> `camera_link` (Physical Mount).
-    - `camera_link` -> `camera_link_optical` (Optical Rotation).
-- MAVROS handles the FRD <-> FLU conversion automatically, but the camera frames required explicit management.
+### Phase 3 — Geometric Stability (Loop-Closure Gated)
+Activates on the first RTABMAP loop closure. Processes **one loop closure per `/rtabmap/cloud_map` update** — this ensures each snapshot sees a genuinely different map state. For each active cluster: computes PCA, compares eigenvectors to the previous snapshot, and checks BBOX stability.
 
-## Change Detection & Point Cloud Segregation
-We have implemented a robust system to detect changes between a high-resolution scan and a base model.
+After `PHASE3_LC_WINDOW` loop closures, applies the planarity filter and saves stable clusters as PLY files.
 
-### Workflow
-1.  **Segregation**: 
-    - Incoming point clouds are processed to remove the ground plane (using RANSAC).
-    - Remaining objects are clustered using Euclidean Clustering (DBSCAN) to separate distinct entities (e.g., rocks, obstacles).
-2.  **Descriptor Assignment**:
-    - Each cluster is analyzed to extract key properties, forming a unique descriptor:
-        - **Centroid**: (x, y, z) position.
-        - **Bounding Box**: Axis-aligned geometric extent.
-        - **Dimensions**: Width, Height, Depth.
-        - **Point Count**: Density/Volume proxy.
-        - **Fractal Dimension**: Metric for surface complexity (e.g., ~2.04 for rocks).
-        - **PCA Analysis**: Eigenvalues and Eigenvectors to determine object orientation and principal axes.
-3.  **Change Detection**:
-    - We employ a `compare_clusters` function that checks the Euclidean distance between centroids, dimensions, eigenvalues, and eigenvectors (handling sign ambiguity).
-    - **Threshold**: A delta threshold (e.g., 1.5) determines if an object is a match or new.
-    - **New Objects**: Clusters with no matching descriptor in the base database are flagged as **New Objects** and saved to `scene_delta.ply`.
-    
-### Visualization
-The `visualize_pcd.py` script now launches three parallel Open3D windows:
-1.  **Base Cloud**: The original environment.
-2.  **Changed Cloud**: The new scan containing updates.
-3.  **New Objects Detected**: A dedicated view isolating only the new or changed entities, highlighted in Red.
-Values are visualized with a 30m Grid and Coordinate Frames for reference.
+| Parameter | Default | Description |
+|---|---|---|
+| `PHASE3_LC_WINDOW` | `6` | Loop closures to track before saving |
+| `CONVERGENCE_WINDOW` | `2` | Min passing LC pairs required for convergence |
+| `PCA_CROSS_THR` | `0.342` (sin 20°) | Max eigenvector deviation between LCs |
+| `BBOX_DIM_THR` | `2.0` m | Max BBOX dimension change between LCs |
+| `PLANARITY_THR` | `0.174` (sin 10°) | Max angle between smallest PCA axis and ground normal |
+| `PLANARITY_RATIO_THR` | `1e-3` | Max `eig2/eig0` — filters truly flat clusters |
 
-### Implementation
-- The logic is encapsulated in `src/point_cloud_processing/src/visualize_pcd.py`.
-- **Modular Design**:
-    - `cluster_filtering`: Handles ground removal and DBSCAN clustering.
-    - `cluster_properties`: Computes and assigns descriptors (centroid, bbox, PCA, Fractal Dim) to each cluster.
-    - `compare_clusters`: Logic for differencing and matching objects.
+---
 
-## Point Cloud Compression Pipeline
+## Key Nodes
 
-We have developed a semantic compression system that achieves **16:1 compression** on deviation data using parametric surface representations.
+| Node | Executable | Description |
+|---|---|---|
+| `cluster_tracker` | `cluster_tracker` | Orchestrates Phases 1–3; saves PLY files |
+| `run_controller` | `run_controller` | Flies lawnmower, shuts down at N loop closures |
+| `mavros_control` | `mavros_control` | Arms drone, sets OFFBOARD mode, sends waypoints |
+| `synced_broadcaster` | `synced_broadcaster` | Publishes TF `map→base_link` with interpolated timestamps |
+| `traversability` | `traversability` | Generates and executes lawnmower waypoints |
 
-### Architecture
+---
 
-#### 1. **Global Superquadric Fitting** (`super_quadrics_reduction.py`)
-- Fits a base Superquadric to the entire point cloud using the EMS (Expectation-Maximization-Switching) algorithm
-- **Parameters**: 5 shape params (ax, ay, az, e1, e2) + 3 center + 9 rotation = 17 floats
-- **Output**: 
-  - `results/output.txt`: Detailed fitting statistics (SQ params, bbox, PCA, inlier/outlier counts)
-  - `encoded_data/sq_params.npy`, `sq_center.npy`, `sq_rotation.npy`: Encoded parameters
-  - `viz_output/05_Deviation_Points_>10cm.ply`: Points >10cm from SQ surface
+## Output Files
 
-#### 2. **Deviation Patch Analysis** (`deviation_reduction.py`)
-- **Clustering**: DBSCAN + K-Means to identify distinct deviation patches
-- **Ray-Based Filtering**: Constructs ray from Global SQ center through patch centroid, filters points within 30° cone
-- **EM Paraboloid Fitting**: Fits paraboloid to each patch using iterative EM algorithm
-  - **E-Step**: Classifies points as inliers (<5cm) or outliers
-  - **M-Step**: Re-fits paraboloid using only inliers
-  - **Convergence**: Typically 5-10 iterations
-- **Output**: `viz_output/paraboloid_fitting_results.csv` with per-patch statistics
+Each run saves to `test_runs/RUN_ROCKS_<N>/trial_<ID>/`:
 
-#### 3. **Paraboloid Fitting** (`geometry_fitting.py`)
-- `fit_paraboloid()`: Standard least-squares fitting (z = ax² + by² + cxy + dx + ey + f)
-- `fit_paraboloid_em()`: EM-based robust fitting with automatic inlier/outlier classification
-- `generate_paraboloid_points()`: Surface reconstruction from parameters
+| File | Description |
+|---|---|
+| `clusters/Cluster_N.ply` | Saved rock point cloud (one per detected rock) |
+| `cluster_metrics.csv` | Per-LC stability metrics for each cluster |
+| `centroid_log.csv` | Centroid position history across frames |
+| `phase_stats.json` | Summary: rocks spawned, detected, false positives |
+| `run_metadata.json` | Trial config (NUM_ROCKS, TRIAL_ID, timestamps) |
 
-### Compression Results
+---
 
-**Input**: 249,464 deviation points × 3 coordinates = **748,392 floats**
+## Experimental Results
 
-**Compressed Representation**:
-- Global Superquadric: 17 floats
-- 60 Paraboloid patches: 360 floats (60 × 6 parameters)
-- 15,353 Outliers: 46,059 floats (unexplained points)
-- **Total**: **46,436 floats**
+30 trials across NUM_ROCKS 1–10, **~92% overall detection rate**.
 
-**Compression Ratio**: **16.12:1** (93.8% reduction)
+| NUM_ROCKS | Trial 1 | Trial 2 | Trial 3 | Rate |
+|---|---|---|---|---|
+| 1 | 1/1 | 1/1 | 1/1 | 100% |
+| 2 | 2/2 | 2/2 | 2/2 | 100% |
+| 3 | 3/3 | 3/3 | 3/3 | 100% |
+| 4 | 4/4 | 4/4 | 4/4 | 100% |
+| 5 | 5/5 | 4/5 | 5/5 | 93% |
+| 6 | 5/6 | 5/6 | 4/6 | 78% |
+| 7 | 6/7 | 6/7 | 7/7 | 90% |
+| 8 | 7/8 | 8/8 | 8/8 | 96% |
+| 9 | 8/9 | 8/9 | 9/9 | 93% |
+| 10 | 7/10 | 10/10 | 10/10 | 90% |
 
-### Key Features
-- **Semantic Compression**: Preserves geometric meaning (base shape + bumps)
-- **Parametric Representation**: Editable parameters vs. opaque bitstreams
-- **Bounded Error**: 5cm threshold ensures predictable reconstruction quality
-- **Automatic Segmentation**: No manual intervention required
+Main failure mode: RTABMAP loop closure corrections merging a rock cluster with surrounding terrain → BBOX explosion → convergence failure (~8% false negatives).
 
-### Usage
+---
 
-#### Run Global Superquadric Fitting
-```bash
-cd src/point_cloud_processing/src/superquadrics
-python3 super_quadrics_reduction.py
-```
+## QoS Note
 
-#### Run Deviation Patch Analysis
-```bash
-cd src/point_cloud_processing/src/deviation
-python3 deviation_reduction.py
-```
-
-### Future Work
-- **Decoder Implementation**: Reconstruct geometry from compressed parameters
-- **Validation**: Measure reconstruction error and visual fidelity
-- **Optimization**: Reduce decode time for real-time applications
+RTABMAP publishes `/rtabmap/cloud_map` and `/rtabmap/info` with **Best Effort** QoS. Both `cluster_tracker` and `run_controller` subscribe with explicit `BEST_EFFORT` QoS — using the default Reliable QoS causes silent message drops and the pipeline receives nothing.
